@@ -9,16 +9,16 @@ import { Chart } from "react-google-charts";
 
 // --- TIER 1: GOOGLE GEMINI KEYS ---
 const GOOGLE_KEYS = [
-  "AIzaSyAFaWUO1rldTa6g7Ox5AIvlti1I9JzcH4Q",
-  "AIzaSyCuJZZ6Iifzr9LIAvUB-6l5O2l_kYU6BZQ",
-  "AIzaSyCBbOIASxAjDFer0m6TrOPfVEzRKPElXnQ",
-  "AIzaSyCkTxWH1KaBN2uYPy-SB2AVR16kveEEAxQ",
-  "AIzaSyDiGycQD6Z-0qkgkFvmfy-JB2A2O2mYctQ"
+  "Your API Key",
+  "Your API Key",
+  "Your API Key",
+  "Your API Key",
+  "Your API Key"
 ];
 
 // --- TIER 2 & 3: BACKUP PROVIDERS ---
-const OPENROUTER_KEY = "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";
-const GROQ_KEY = "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";
+const OPENROUTER_KEY = "Your API Key";
+const GROQ_KEY = "Your API Key";
 
 function MapController({ center, zoom }) {
   const map = useMap();
