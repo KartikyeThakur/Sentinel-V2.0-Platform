@@ -47,7 +47,8 @@ export default function MainApp() {
   const [aiInput, setAiInput] = useState("");
   const chatEndRef = useRef(null);
 
-  const API = "http://127.0.0.1:8000/api";
+  // 🔥 FIXED: Localhost ko hata kar '/api' kar diya hai taaki Vercel backend se connect ho sake
+  const API = "/api";
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [aiChat, aiOpen]);
 
