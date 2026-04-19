@@ -221,16 +221,15 @@ def ask_ai(payload: dict):
         os.getenv("GEMINI_API_KEY_5"),
     ]
 
-    api_key = None
-    for key in keys:
-        if key:
-            api_key = key
-            break
+    api_key = next((k for k in keys if k), None)
 
     if not api_key:
         return {"ans": "No API keys configured."}
 
     user_q = payload.get('q', '')
+    if not user_q:
+        return {"ans": "No question provided."}
+
     cols = list(CURRENT_DF.columns)[:15]
 
     prompt = f"You are Sentinel, a data AI. Dataset columns: {cols}. User asks: {user_q}. Keep your answer brief and helpful."
@@ -241,6 +240,13 @@ def ask_ai(payload: dict):
     try:
         resp = requests.post(url, headers=headers, json=data, timeout=15)
         if resp.status_code == 200:
+            result = resp.json()
+            answer = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', "No response")
+            return {"ans": answer}
+        else:
+            return {"ans": f"Google Server Error Code {resp.status_code}"}
+    except Exception as e:
+        return {"ans": f"System Error: {str(e)}"}
             result = resp.json()
            answer = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', "No response")
             return {"ans": answer}
