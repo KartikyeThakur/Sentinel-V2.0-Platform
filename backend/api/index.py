@@ -6,7 +6,10 @@ from datetime import datetime
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+try:
+    load_dotenv()
+except:
+    pass
 
 app = FastAPI()
 
