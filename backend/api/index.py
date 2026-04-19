@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
-import hashlib, sqlite3, os, uvicorn
+import hashlib, sqlite3, os
 from datetime import datetime
 import requests
 from dotenv import load_dotenv
@@ -15,17 +15,17 @@ app = FastAPI()
 
 @app.get("/")
 def home():
-    return {"message": "Backend is working "}
+    return {"message": "Backend is working"}
 
 UPLOAD_DIR = "/tmp/datasets"
 DB_PATH = "/tmp/sentinel.db"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app.add_middleware(
-    CORSMiddleware, 
-    allow_origins=["*"], 
-    allow_credentials=True, 
-    allow_methods=["*"], 
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
     allow_headers=["*"]
 )
 
@@ -45,28 +45,32 @@ def log_action(action):
         cursor.execute("INSERT INTO history (action, timestamp) VALUES (?, ?)", (action, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
         conn.commit()
         conn.close()
-    except: pass
+    except:
+        pass
 
 init_db()
 
 CURRENT_DF = None
 ACTIVE_FILE = "None"
 
-def encrypt(pw): return hashlib.sha256(pw.encode()).hexdigest()
+def encrypt(pw):
+    return hashlib.sha256(pw.encode()).hexdigest()
 
 @app.post("/api/register")
 async def register(data: dict):
     u, p = data.get("username"), data.get("password")
-    if not u or not p: raise HTTPException(status_code=400, detail="ID and Key required")
+    if not u or not p:
+        raise HTTPException(status_code=400, detail="ID and Key required")
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     try:
         cursor.execute("INSERT INTO users VALUES (?, ?)", (u, encrypt(p)))
         conn.commit()
         return {"status": "OK"}
-    except sqlite3.IntegrityError: 
+    except sqlite3.IntegrityError:
         raise HTTPException(status_code=400, detail="Username taken.")
-    finally: conn.close()
+    finally:
+        conn.close()
 
 @app.post("/api/login")
 async def login(data: dict):
@@ -76,7 +80,8 @@ async def login(data: dict):
     cursor.execute("SELECT password FROM users WHERE username=?", (u,))
     res = cursor.fetchone()
     conn.close()
-    if res and res[0] == encrypt(p): return {"status": "OK"}
+    if res and res[0] == encrypt(p):
+        return {"status": "OK"}
     raise HTTPException(status_code=401, detail="Invalid Credentials")
 
 @app.post("/api/upload")
@@ -85,14 +90,18 @@ async def upload(file: UploadFile = File(...)):
     try:
         content = await file.read()
         path = os.path.join(UPLOAD_DIR, file.filename)
-        with open(path, "wb") as f: f.write(content)
-        
+        with open(path, "wb") as f:
+            f.write(content)
+
         if file.filename.lower().endswith(('.xlsx', '.xls')):
             CURRENT_DF = pd.read_excel(path)
         else:
-            try: CURRENT_DF = pd.read_csv(path, low_memory=False)
-            except UnicodeDecodeError: CURRENT_DF = pd.read_csv(path, encoding='latin1', low_memory=False)
-            except Exception: CURRENT_DF = pd.read_csv(path, engine='python', on_bad_lines='skip')
+            try:
+                CURRENT_DF = pd.read_csv(path, low_memory=False)
+            except UnicodeDecodeError:
+                CURRENT_DF = pd.read_csv(path, encoding='latin1', low_memory=False)
+            except Exception:
+                CURRENT_DF = pd.read_csv(path, engine='python', on_bad_lines='skip')
 
         CURRENT_DF.columns = CURRENT_DF.columns.astype(str).str.strip().str.replace('\n', ' ').str.replace('\r', '')
         ACTIVE_FILE = file.filename
@@ -104,7 +113,8 @@ async def upload(file: UploadFile = File(...)):
 @app.post("/api/clean")
 async def clean_data():
     global CURRENT_DF
-    if CURRENT_DF is None: raise HTTPException(status_code=400, detail="No dataset loaded.")
+    if CURRENT_DF is None:
+        raise HTTPException(status_code=400, detail="No dataset loaded.")
     before = len(CURRENT_DF)
     CURRENT_DF = CURRENT_DF.dropna()
     removed = before - len(CURRENT_DF)
@@ -118,16 +128,19 @@ async def reuse(data: dict):
     path = os.path.join(UPLOAD_DIR, name)
     if os.path.exists(path):
         try:
-            if name.lower().endswith(('.xlsx', '.xls')): CURRENT_DF = pd.read_excel(path)
-            else: 
-                try: CURRENT_DF = pd.read_csv(path, low_memory=False)
-                except: CURRENT_DF = pd.read_csv(path, encoding='latin1', low_memory=False)
-            
+            if name.lower().endswith(('.xlsx', '.xls')):
+                CURRENT_DF = pd.read_excel(path)
+            else:
+                try:
+                    CURRENT_DF = pd.read_csv(path, low_memory=False)
+                except:
+                    CURRENT_DF = pd.read_csv(path, encoding='latin1', low_memory=False)
+
             CURRENT_DF.columns = CURRENT_DF.columns.astype(str).str.strip().str.replace('\n', ' ').str.replace('\r', '')
             ACTIVE_FILE = name
             log_action(f"Restored Memory: {name}")
             return {"cols": list(CURRENT_DF.columns)}
-        except Exception as e: 
+        except Exception as e:
             raise HTTPException(status_code=500, detail=f"Corrupted file: {e}")
     raise HTTPException(status_code=404)
 
@@ -137,7 +150,8 @@ async def purge(name: str):
     path = os.path.join(UPLOAD_DIR, name)
     if os.path.exists(path):
         os.remove(path)
-        if ACTIVE_FILE == name: ACTIVE_FILE, CURRENT_DF = "None", None
+        if ACTIVE_FILE == name:
+            ACTIVE_FILE, CURRENT_DF = "None", None
         log_action(f"Deleted Memory: {name}")
     return {"status": "OK"}
 
@@ -152,67 +166,14 @@ async def get_info():
         cols = list(CURRENT_DF.columns) if CURRENT_DF is not None else []
         files = os.listdir(UPLOAD_DIR) if os.path.exists(UPLOAD_DIR) else []
         return {"files": files, "active": ACTIVE_FILE, "history": h, "cols": cols}
-    except Exception: return {"files": [], "active": "None", "history": [], "cols": []}
-
-@app.post("/api/viz")
-async def get_viz(payload: dict):
-    if CURRENT_DF is None or CURRENT_DF.empty: return []
-    col = payload.get("col")
-    if not col or col not in CURRENT_DF.columns: col = CURRENT_DF.columns[0]
-    series = CURRENT_DF[col].dropna()
-    if series.empty: return [] 
-    res = series.value_counts().head(20).reset_index()
-    res.columns = ['name', 'value']
-    res['name'] = res['name'].astype(str)
-    res['value'] = res['value'].astype(int)
-    return res.to_dict(orient="records")
-
-@app.get("/api/data")
-async def get_data(page: int = 1, query: str = ""):
-    if CURRENT_DF is None: return {"rows": [], "total": 0}
-    df = CURRENT_DF
-    if query: df = df[df.apply(lambda r: r.astype(str).str.contains(query, case=False).any(), axis=1)]
-    limit = 4
-    start = (page - 1) * limit
-    return {"rows": df.iloc[start:start+limit].fillna("N/A").to_dict(orient="records"), "total": (len(df)//limit)+1}
-
-@app.get("/api/map_data")
-async def get_map():
-    if CURRENT_DF is None: return []
-    geo_cols = [c for c in CURRENT_DF.columns if any(x in c.lower() for x in ['venue', 'city', 'location'])]
-    if not geo_cols: return []
-    res = CURRENT_DF[geo_cols[0]].value_counts().head(50).reset_index()
-    res.columns = ['name', 'count']
-    
-    # ... (map coordinates list stays the same) ...
-    geo_dict = {"mumbai": [19.0760, 72.8777], "delhi": [28.7041, 77.1025], "bangalore": [12.9716, 77.5946]} 
-    
-    points = []
-    for i, row in res.iterrows():
-        name_str = str(row['name']).lower().strip()
-        lat, lng = None, None
-        for key, coords in geo_dict.items():
-            if key in name_str:
-                lat, lng = coords[0], coords[1]
-                break
-        if lat and lng:
-            points.append({"name": str(row['name']), "lat": lat, "lng": lng, "count": int(row['count'])})
-    return points
-
-@app.delete("/api/clear_history")
-async def clear():
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM history"); conn.commit(); conn.close()
-        return {"status": "OK"}
-    except: return {"status": "FAILED"}
+    except:
+        return {"files": [], "active": "None", "history": [], "cols": []}
 
 @app.post("/api/ai")
 def ask_ai(payload: dict):
-    if CURRENT_DF is None: 
+    if CURRENT_DF is None:
         return {"ans": "System offline. Please upload a dataset."}
-    
+
     keys = [
         os.getenv("GEMINI_API_KEY_1"),
         os.getenv("GEMINI_API_KEY_2"),
@@ -242,13 +203,6 @@ def ask_ai(payload: dict):
         if resp.status_code == 200:
             result = resp.json()
             answer = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', "No response")
-            return {"ans": answer}
-        else:
-            return {"ans": f"Google Server Error Code {resp.status_code}"}
-    except Exception as e:
-        return {"ans": f"System Error: {str(e)}"}
-            result = resp.json()
-           answer = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', "No response")
             return {"ans": answer}
         else:
             return {"ans": f"Google Server Error Code {resp.status_code}"}
