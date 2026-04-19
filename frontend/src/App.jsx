@@ -46,8 +46,7 @@ export default function MainApp() {
   const [aiChat, setAiChat] = useState([{role: 'ai', text: 'I am Sentinel AI. All systems are online. How can I assist with your data today?'}]);
   const [aiInput, setAiInput] = useState("");
   const chatEndRef = useRef(null);
-
-   const API = (import.meta.env.VITE_API_BASE_URL || "https://sentinel-v2-0-platform.vercel.app/api").replace(/\/$/, "");
+  const API = (import.meta.env.VITE_API_BASE_URL || "https://sentinel-v2-0-platform.vercel.app/api").replace(/\/$/, "");
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [aiChat, aiOpen]);
 
