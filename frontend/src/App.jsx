@@ -47,8 +47,7 @@ export default function MainApp() {
   const [aiInput, setAiInput] = useState("");
   const chatEndRef = useRef(null);
 
-  // 🔥 FIXED: Localhost ko hata kar '/api' kar diya hai taaki Vercel backend se connect ho sake
-  const API = "/api";
+   const API = (import.meta.env.VITE_API_BASE_URL || "https://sentinel-v2-0-platform.vercel.app/api").replace(/\/$/, "");
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [aiChat, aiOpen]);
 
