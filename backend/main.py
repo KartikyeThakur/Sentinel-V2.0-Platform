@@ -210,7 +210,30 @@ def ask_ai(payload: dict):
     if CURRENT_DF is None: 
         return {"ans": "System offline. Please upload a dataset."}
     
-    api_key = os.getenv("GOOGLE_API_KEY")
+   keys = [
+    os.getenv("GEMINI_API_KEY_1"),
+    os.getenv("GEMINI_API_KEY_2"),
+    os.getenv("GEMINI_API_KEY_3"),
+    os.getenv("GEMINI_API_KEY_4"),
+    os.getenv("GEMINI_API_KEY_5"),
+]
+
+working_key = None
+
+for key in keys:
+    if key:
+        working_key = key
+        break
+
+if not working_key:
+    return {"ans": "No API keys configured."}
+
+api_key = working_key
+
+if resp.status_code != 200:
+    groq_key = os.getenv("GROQ_API_KEY")
+    if groq_key:
+        return {"ans": "Gemini failed, fallback to Groq (implement later)"}
     
     user_q = payload.get('q', '')
     cols = list(CURRENT_DF.columns)[:15]
