@@ -10,6 +10,9 @@ load_dotenv()
 
 app = FastAPI()
 
+@app.get("/")
+def home():
+    return {"message": "Backend is working "}
 
 UPLOAD_DIR = "/tmp/datasets"
 DB_PATH = "/tmp/sentinel.db"
