@@ -210,39 +210,31 @@ def ask_ai(payload: dict):
     if CURRENT_DF is None: 
         return {"ans": "System offline. Please upload a dataset."}
     
-   keys = [
-    os.getenv("GEMINI_API_KEY_1"),
-    os.getenv("GEMINI_API_KEY_2"),
-    os.getenv("GEMINI_API_KEY_3"),
-    os.getenv("GEMINI_API_KEY_4"),
-    os.getenv("GEMINI_API_KEY_5"),
-]
+    keys = [
+        os.getenv("GEMINI_API_KEY_1"),
+        os.getenv("GEMINI_API_KEY_2"),
+        os.getenv("GEMINI_API_KEY_3"),
+        os.getenv("GEMINI_API_KEY_4"),
+        os.getenv("GEMINI_API_KEY_5"),
+    ]
 
-working_key = None
+    api_key = None
+    for key in keys:
+        if key:
+            api_key = key
+            break
 
-for key in keys:
-    if key:
-        working_key = key
-        break
+    if not api_key:
+        return {"ans": "No API keys configured."}
 
-if not working_key:
-    return {"ans": "No API keys configured."}
-
-api_key = working_key
-
-if resp.status_code != 200:
-    groq_key = os.getenv("GROQ_API_KEY")
-    if groq_key:
-        return {"ans": "Gemini failed, fallback to Groq (implement later)"}
-    
     user_q = payload.get('q', '')
     cols = list(CURRENT_DF.columns)[:15]
-    
+
     prompt = f"You are Sentinel, a data AI. Dataset columns: {cols}. User asks: {user_q}. Keep your answer brief and helpful."
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     headers = {'Content-Type': 'application/json'}
     data = {"contents": [{"parts": [{"text": prompt}]}]}
-    
+
     try:
         resp = requests.post(url, headers=headers, json=data, timeout=15)
         if resp.status_code == 200:
@@ -250,9 +242,6 @@ if resp.status_code != 200:
             answer = result['candidates'][0]['content']['parts'][0]['text']
             return {"ans": answer}
         else:
-            return {"ans": f"Google Server Error Code {resp.status_code}."}
+            return {"ans": f"Google Server Error Code {resp.status_code}"}
     except Exception as e:
         return {"ans": f"System Error: {str(e)}"}
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
