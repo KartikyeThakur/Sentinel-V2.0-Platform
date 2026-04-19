@@ -242,7 +242,7 @@ def ask_ai(payload: dict):
         resp = requests.post(url, headers=headers, json=data, timeout=15)
         if resp.status_code == 200:
             result = resp.json()
-            answer = result['candidates'][0]['content']['parts'][0]['text']
+           answer = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', "No response")
             return {"ans": answer}
         else:
             return {"ans": f"Google Server Error Code {resp.status_code}"}
