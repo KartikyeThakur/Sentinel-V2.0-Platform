@@ -204,6 +204,78 @@ async def get_info():
         return {"files": [], "active": "None", "history": [], "cols": []}
 
 
+
+
+@app.get("/api/data")
+async def get_data(page: int = 1, query: str = ""):
+    if CURRENT_DF is None:
+        return {"rows": [], "total": 1}
+
+    page_size = 20
+    filtered_df = CURRENT_DF
+
+    q = (query or "").strip().lower()
+    if q:
+        mask = filtered_df.astype(str).apply(lambda col: col.str.lower().str.contains(q, na=False))
+        filtered_df = filtered_df[mask.any(axis=1)]
+
+    total_pages = max(1, (len(filtered_df) + page_size - 1) // page_size)
+    page = max(1, min(page, total_pages))
+    start = (page - 1) * page_size
+    end = start + page_size
+
+    rows = filtered_df.iloc[start:end].fillna("").to_dict(orient="records")
+    return {"rows": rows, "total": total_pages}
+
+
+@app.get("/api/map_data")
+async def map_data():
+    if CURRENT_DF is None:
+        return []
+
+    cols = {c.lower(): c for c in CURRENT_DF.columns}
+
+    lat_col = next((cols[k] for k in ["lat", "latitude", "y"] if k in cols), None)
+    lng_col = next((cols[k] for k in ["lng", "lon", "long", "longitude", "x"] if k in cols), None)
+    name_col = next((cols[k] for k in ["name", "city", "venue", "location", "stadium"] if k in cols), None)
+
+    if not (lat_col and lng_col):
+        return []
+
+    df = CURRENT_DF.copy()
+    df[lat_col] = pd.to_numeric(df[lat_col], errors="coerce")
+    df[lng_col] = pd.to_numeric(df[lng_col], errors="coerce")
+    df = df.dropna(subset=[lat_col, lng_col])
+
+    items = []
+    for _, row in df.head(500).iterrows():
+        items.append(
+            {
+                "name": str(row.get(name_col, "Point")) if name_col else "Point",
+                "lat": float(row[lat_col]),
+                "lng": float(row[lng_col]),
+            }
+        )
+    return items
+
+
+@app.post("/api/viz")
+async def viz(data: dict):
+    if CURRENT_DF is None:
+        return []
+
+    col = (data.get("col") or "").strip()
+    if not col:
+        return []
+    if col not in CURRENT_DF.columns:
+        raise HTTPException(status_code=400, detail=f"Column '{col}' not found")
+
+    series = CURRENT_DF[col].dropna().astype(str).str.strip()
+    series = series[series != ""]
+
+    counts = series.value_counts().head(50)
+    return [{"name": str(k), "value": int(v)} for k, v in counts.items()]
+
 @app.post("/api/ai")
 def ask_ai(payload: dict):
     if CURRENT_DF is None:
