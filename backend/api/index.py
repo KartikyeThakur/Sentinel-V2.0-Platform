@@ -4,6 +4,7 @@ import pandas as pd
 import hashlib
 import sqlite3
 import os
+import json
 from datetime import datetime
 import requests
 from dotenv import load_dotenv
@@ -26,6 +27,7 @@ def health():
 DATA_ROOT = os.getenv("SENTINEL_DATA_DIR", "/tmp/sentinel")
 UPLOAD_DIR = os.path.join(DATA_ROOT, "datasets")
 DB_PATH = os.path.join(DATA_ROOT, "sentinel.db")
+GEOCODE_CACHE_PATH = os.path.join(DATA_ROOT, "geo_cache.json")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app.add_middleware(
@@ -74,10 +76,79 @@ init_db()
 
 CURRENT_DF = None
 ACTIVE_FILE = "None"
+GEOCODE_USER_AGENT = "SentinelMapGeocoder/2.0"
+GEOCODE_TIMEOUT = 8
+MAX_MAP_ITEMS = 500
+MAX_GEOCODE_UNIQUE = 150
+GEOCODE_COL_CANDIDATES = [
+    "location",
+    "city",
+    "place",
+    "venue",
+    "stadium",
+    "name",
+    "district",
+    "state",
+    "country",
+    "address",
+]
 
 
 def encrypt(pw):
     return hashlib.sha256(pw.encode()).hexdigest()
+
+
+def load_geo_cache() -> dict:
+    try:
+        if os.path.exists(GEOCODE_CACHE_PATH):
+            with open(GEOCODE_CACHE_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, dict) else {}
+    except Exception:
+        pass
+    return {}
+
+
+def save_geo_cache(cache: dict) -> None:
+    try:
+        os.makedirs(os.path.dirname(GEOCODE_CACHE_PATH), exist_ok=True)
+        with open(GEOCODE_CACHE_PATH, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def geocode_place(place: str, cache: dict):
+    key = (place or "").strip().lower()
+    if not key:
+        return None
+
+    cached = cache.get(key)
+    if isinstance(cached, dict) and "lat" in cached and "lng" in cached:
+        return cached
+
+    try:
+        resp = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"format": "json", "limit": 1, "q": place},
+            headers={"User-Agent": GEOCODE_USER_AGENT},
+            timeout=GEOCODE_TIMEOUT,
+        )
+        if resp.status_code == 200:
+            payload = resp.json() or []
+            if payload:
+                loc = payload[0]
+                point = {
+                    "lat": float(loc["lat"]),
+                    "lng": float(loc["lon"]),
+                }
+                cache[key] = point
+                return point
+    except Exception:
+        pass
+
+    cache[key] = None
+    return None
 
 
 @app.post("/api/register")
@@ -229,7 +300,7 @@ async def get_data(page: int = 1, query: str = ""):
 
 
 @app.get("/api/map_data")
-async def map_data():
+async def map_data():␊
     if CURRENT_DF is None:
         return []
 
@@ -239,24 +310,59 @@ async def map_data():
     lng_col = next((cols[k] for k in ["lng", "lon", "long", "longitude", "x"] if k in cols), None)
     name_col = next((cols[k] for k in ["name", "city", "venue", "location", "stadium"] if k in cols), None)
 
-    if not (lat_col and lng_col):
+    df = CURRENT_DF.copy()
+    items = []
+
+    if lat_col and lng_col:
+        df[lat_col] = pd.to_numeric(df[lat_col], errors="coerce")
+        df[lng_col] = pd.to_numeric(df[lng_col], errors="coerce")
+        df = df.dropna(subset=[lat_col, lng_col])
+
+        for _, row in df.head(MAX_MAP_ITEMS).iterrows():
+            items.append(
+                {
+                    "name": str(row.get(name_col, "Point")) if name_col else "Point",
+                    "lat": float(row[lat_col]),
+                    "lng": float(row[lng_col]),
+                }
+            )
+        return items
+
+    geocode_col = next((cols[k] for k in GEOCODE_COL_CANDIDATES if k in cols), None)
+    if not geocode_col:
         return []
 
-    df = CURRENT_DF.copy()
-    df[lat_col] = pd.to_numeric(df[lat_col], errors="coerce")
-    df[lng_col] = pd.to_numeric(df[lng_col], errors="coerce")
-    df = df.dropna(subset=[lat_col, lng_col])
+    cache = load_geo_cache()
+    geocoded_count = 0
+    subset = df.head(MAX_MAP_ITEMS)
 
-    items = []
-    for _, row in df.head(500).iterrows():
+    for _, row in subset.iterrows():
+        place_value = row.get(geocode_col)
+        if pd.isna(place_value):
+            continue
+
+        place = str(place_value).strip()
+        if not place:
+            continue
+
+        point = geocode_place(place, cache)
+        if point is None:
+            continue
+
+        geocoded_count += 1
         items.append(
             {
-                "name": str(row.get(name_col, "Point")) if name_col else "Point",
-                "lat": float(row[lat_col]),
-                "lng": float(row[lng_col]),
+                "name": str(row.get(name_col, place)) if name_col else place,
+                "lat": point["lat"],
+                "lng": point["lng"],
             }
         )
+        if geocoded_count >= MAX_GEOCODE_UNIQUE:
+            break
+
+    save_geo_cache(cache)
     return items
+
 
 
 @app.post("/api/viz")
