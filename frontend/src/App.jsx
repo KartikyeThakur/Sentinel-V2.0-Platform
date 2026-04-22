@@ -46,8 +46,19 @@ export default function MainApp() {
   const [aiChat, setAiChat] = useState([{role: 'ai', text: 'I am Sentinel AI. All systems are online. How can I assist with your data today?'}]);
   const [aiInput, setAiInput] = useState("");
   const chatEndRef = useRef(null);
+  const runtimeApiBase = (() => {
+    if (typeof window === "undefined") return "";
+    const params = new URLSearchParams(window.location.search);
+    const apiFromQuery = params.get("api");
+    if (apiFromQuery) {
+      localStorage.setItem("sentinel_api_base_url", apiFromQuery);
+      return apiFromQuery;
+    }
+    return localStorage.getItem("sentinel_api_base_url") || "";
+  })();
   const defaultApiBase = typeof window !== "undefined" ? `${window.location.origin}/api` : "/api";
-  const API = (import.meta.env.VITE_API_BASE_URL || defaultApiBase).replace(/\/$/, "");
+  const API = (runtimeApiBase || import.meta.env.VITE_API_BASE_URL || defaultApiBase).replace(/\/$/, "");
+  const [apiInput, setApiInput] = useState(API);
   const [backendStatus, setBackendStatus] = useState({ state: "checking", message: "Checking backend..." });
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [aiChat, aiOpen]);
@@ -61,7 +72,7 @@ export default function MainApp() {
           setBackendStatus({ state: "warning", message: res.data?.message || "Backend responded unexpectedly" });
         }
       } catch (error) {
-        setBackendStatus({ state: "offline", message: "Backend is not reachable" });
+        setBackendStatus({ state: "offline", message: `Backend is not reachable (${API})` });
       }
     };
 
@@ -119,6 +130,18 @@ export default function MainApp() {
             setMode('login'); setAuth(true); 
         } else { setAuth(true); }
     } catch (error) { alert("Auth Failed."); }
+  };
+  
+  const saveApiBase = () => {
+    if (typeof window === "undefined") return;
+    const cleaned = (apiInput || "").trim().replace(/\/$/, "");
+    if (!cleaned.startsWith("http://") && !cleaned.startsWith("https://")) {
+      alert("API URL must start with http:// or https://");
+      return;
+    }
+    const normalized = cleaned.endsWith("/api") ? cleaned : `${cleaned}/api`;
+    localStorage.setItem("sentinel_api_base_url", normalized);
+    window.location.reload();
   };
 
   const uploadFile = async (e) => {
@@ -422,6 +445,21 @@ export default function MainApp() {
           {backendStatus.message}
         </p>
         <div className="space-y-4">
+                    <div className="space-y-2">
+            <input
+              type="text"
+              placeholder="Backend URL (e.g. https://your-backend.vercel.app/api)"
+              className="w-full bg-black/40 border border-cyan-500/30 rounded-2xl p-3 text-xs outline-none"
+              value={apiInput}
+              onChange={e => setApiInput(e.target.value)}
+            />
+            <button
+              onClick={saveApiBase}
+              className="w-full bg-slate-700 text-cyan-300 font-bold py-2 rounded-xl text-[10px] uppercase hover:bg-slate-600 transition-all"
+            >
+              Save Backend URL
+            </button>
+          </div>
           <input type="text" placeholder="Username" className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm outline-none" value={creds.u} onChange={e=>setCreds({...creds, u:e.target.value})} />
           <input type="password" placeholder="Password" className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm outline-none" value={creds.p} onChange={e=>setCreds({...creds, p:e.target.value})} />
           <button onClick={handleAuth} className="w-full bg-cyan-500 text-black font-black py-4 rounded-2xl text-xs uppercase hover:bg-cyan-400 transition-all">{mode === 'login' ? 'Login' : 'Register'}</button>
