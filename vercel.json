@@ -4,11 +4,19 @@
   "buildCommand": "cd frontend && npm run build",
   "outputDirectory": "frontend/dist",
   "functions": {
-    "api/**/*.py": {
+    "backend/api/*.py": {
       "runtime": "python3.11"
     }
   },
   "rewrites": [
+    {
+      "source": "/api",
+      "destination": "/backend/api/index.py"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/backend/api/index.py"
+    },
     {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
