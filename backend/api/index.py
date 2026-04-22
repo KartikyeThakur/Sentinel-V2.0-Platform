@@ -23,6 +23,7 @@ def home():
 def health():
     return {"status": "ok"}
 
+
 DATA_ROOT = os.getenv("SENTINEL_DATA_DIR", "/tmp/sentinel")
 UPLOAD_DIR = os.path.join(DATA_ROOT, "datasets")
 DB_PATH = os.path.join(DATA_ROOT, "sentinel.db")
@@ -95,6 +96,59 @@ GEOCODE_COL_CANDIDATES = [
 
 def encrypt(pw):
     return hashlib.sha256(pw.encode()).hexdigest()
+
+
+def load_geo_cache() -> dict:
+    try:
+        if os.path.exists(GEOCODE_CACHE_PATH):
+            with open(GEOCODE_CACHE_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, dict) else {}
+    except Exception:
+        pass
+    return {}
+
+
+def save_geo_cache(cache: dict) -> None:
+    try:
+        os.makedirs(os.path.dirname(GEOCODE_CACHE_PATH), exist_ok=True)
+        with open(GEOCODE_CACHE_PATH, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def geocode_place(place: str, cache: dict):
+    key = (place or "").strip().lower()
+    if not key:
+        return None
+
+    cached = cache.get(key)
+    if isinstance(cached, dict) and "lat" in cached and "lng" in cached:
+        return cached
+
+    try:
+        resp = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"format": "json", "limit": 1, "q": place},
+            headers={"User-Agent": GEOCODE_USER_AGENT},
+            timeout=GEOCODE_TIMEOUT,
+        )
+        if resp.status_code == 200:
+            payload = resp.json() or []
+            if payload:
+                loc = payload[0]
+                point = {
+                    "lat": float(loc["lat"]),
+                    "lng": float(loc["lon"]),
+                }
+                cache[key] = point
+                return point
+    except Exception:
+        pass
+
+    cache[key] = None
+    return None
 
 
 def load_geo_cache() -> dict:
@@ -298,7 +352,7 @@ async def get_data(page: int = 1, query: str = ""):
 
 
 @app.get("/api/map_data")
-async def map_data():␊
+async def map_data():
     if CURRENT_DF is None:
         return []
 
