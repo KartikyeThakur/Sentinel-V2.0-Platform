@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "backend/api/index.py": {
+      "runtime": "@vercel/python@4.0.0"
+    }
+  },
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "backend/api/index.py"
+    }
+  ]
+}
