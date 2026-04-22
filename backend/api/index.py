@@ -84,9 +84,14 @@ GEOCODE_COL_CANDIDATES = [
     "city",
     "place",
     "venue",
+    "venue_name",
     "stadium",
+    "ground",
+    "arena",
     "name",
     "district",
+    "region",
+    "province",
     "state",
     "country",
     "address",
@@ -148,6 +153,41 @@ def geocode_place(place: str, cache: dict):
 
     cache[key] = None
     return None
+
+
+def build_place_queries(row: pd.Series, candidate_columns: list[str]) -> list[str]:
+    values = []
+    for col in candidate_columns:
+        value = row.get(col)
+        if pd.isna(value):
+            continue
+        text = str(value).strip()
+        if text:
+            values.append(text)
+
+    unique_values = []
+    seen = set()
+    for item in values:
+        key = item.lower()
+        if key not in seen:
+            unique_values.append(item)
+            seen.add(key)
+
+    queries = []
+    if len(unique_values) >= 2:
+        queries.append(", ".join(unique_values[:2]))
+    if len(unique_values) >= 3:
+        queries.append(", ".join(unique_values[:3]))
+    queries.extend(unique_values)
+
+    final_queries = []
+    seen_queries = set()
+    for q in queries:
+        k = q.strip().lower()
+        if k and k not in seen_queries:
+            final_queries.append(q)
+            seen_queries.add(k)
+    return final_queries
 
 @app.post("/api/register")
 async def register(data: dict):
@@ -298,7 +338,7 @@ async def get_data(page: int = 1, query: str = ""):
 
 
 @app.get("/api/map_data")
-async def map_data():␊
+async def map_data():
     if CURRENT_DF is None:
         return []
 
@@ -326,8 +366,8 @@ async def map_data():␊
             )
         return items
 
-    geocode_col = next((cols[k] for k in GEOCODE_COL_CANDIDATES if k in cols), None)
-    if not geocode_col:
+    geocode_cols = [cols[k] for k in GEOCODE_COL_CANDIDATES if k in cols]
+    if not geocode_cols:
         return []
 
     cache = load_geo_cache()
@@ -335,22 +375,26 @@ async def map_data():␊
     subset = df.head(MAX_MAP_ITEMS)
 
     for _, row in subset.iterrows():
-        place_value = row.get(geocode_col)
-        if pd.isna(place_value):
+        point = None
+        fallback_name = None
+        place_queries = build_place_queries(row, geocode_cols)
+        if not place_queries:
             continue
 
-        place = str(place_value).strip()
-        if not place:
-            continue
+        for place in place_queries:
+            if fallback_name is None:
+                fallback_name = place
+            point = geocode_place(place, cache)
+            if point is not None:
+                break
 
-        point = geocode_place(place, cache)
         if point is None:
             continue
 
         geocoded_count += 1
         items.append(
             {
-                "name": str(row.get(name_col, place)) if name_col else place,
+                "name": str(row.get(name_col, fallback_name)) if name_col else fallback_name,
                 "lat": point["lat"],
                 "lng": point["lng"],
             }
@@ -379,9 +423,30 @@ async def viz(data: dict):
     counts = series.value_counts().head(50)
     return [{"name": str(k), "value": int(v)} for k, v in counts.items()]
 
+
 @app.post("/api/ai")
 def ask_ai(payload: dict):
     if CURRENT_DF is None:
         return {"ans": "System offline. Please upload a dataset."}
 
-    keys = [
+    question = (payload.get("q") or "").strip()
+    if not question:
+        return {"ans": "Please ask a question about your uploaded dataset."}
+
+    row_count = int(len(CURRENT_DF))
+    col_count = int(len(CURRENT_DF.columns))
+    cols_preview = ", ".join([str(c) for c in list(CURRENT_DF.columns)[:8]])
+
+    response = {
+        "text": (
+            f"Dataset online with {row_count} rows and {col_count} columns. "
+            f"Top columns: {cols_preview}."
+        ),
+        "view": None,
+        "location": None,
+        "column": None,
+        "chart": None,
+        "export": False,
+    }
+
+    return {"ans": json.dumps(response)}
