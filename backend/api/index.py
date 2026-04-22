@@ -151,6 +151,58 @@ def geocode_place(place: str, cache: dict):
     return None
 
 
+def load_geo_cache() -> dict:
+    try:
+        if os.path.exists(GEOCODE_CACHE_PATH):
+            with open(GEOCODE_CACHE_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, dict) else {}
+    except Exception:
+        pass
+    return {}
+
+
+def save_geo_cache(cache: dict) -> None:
+    try:
+        os.makedirs(os.path.dirname(GEOCODE_CACHE_PATH), exist_ok=True)
+        with open(GEOCODE_CACHE_PATH, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def geocode_place(place: str, cache: dict):
+    key = (place or "").strip().lower()
+    if not key:
+        return None
+
+    cached = cache.get(key)
+    if isinstance(cached, dict) and "lat" in cached and "lng" in cached:
+        return cached
+
+    try:
+        resp = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"format": "json", "limit": 1, "q": place},
+            headers={"User-Agent": GEOCODE_USER_AGENT},
+            timeout=GEOCODE_TIMEOUT,
+        )
+        if resp.status_code == 200:
+            payload = resp.json() or []
+            if payload:
+                loc = payload[0]
+                point = {
+                    "lat": float(loc["lat"]),
+                    "lng": float(loc["lon"]),
+                }
+                cache[key] = point
+                return point
+    except Exception:
+        pass
+
+    cache[key] = None
+    return None
+
 @app.post("/api/register")
 async def register(data: dict):
     u, p = data.get("username"), data.get("password")
@@ -387,35 +439,3 @@ def ask_ai(payload: dict):
         return {"ans": "System offline. Please upload a dataset."}
 
     keys = [
-        os.getenv("GEMINI_API_KEY_1"),
-        os.getenv("GEMINI_API_KEY_2"),
-        os.getenv("GEMINI_API_KEY_3"),
-        os.getenv("GEMINI_API_KEY_4"),
-        os.getenv("GEMINI_API_KEY_5"),
-    ]
-
-    api_key = next((k for k in keys if k), None)
-
-    if not api_key:
-        return {"ans": "No API keys configured."}
-
-    user_q = payload.get("q", "")
-    if not user_q:
-        return {"ans": "No question provided."}
-
-    cols = list(CURRENT_DF.columns)[:15]
-
-    prompt = f"You are Sentinel, a data AI. Dataset columns: {cols}. User asks: {user_q}. Keep your answer brief and helpful."
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-    headers = {"Content-Type": "application/json"}
-    data = {"contents": [{"parts": [{"text": prompt}]}]}
-
-    try:
-        resp = requests.post(url, headers=headers, json=data, timeout=15)
-        if resp.status_code == 200:
-            result = resp.json()
-            answer = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "No response")
-            return {"ans": answer}
-        return {"ans": f"Google Server Error Code {resp.status_code}"}
-    except Exception as e:
-        return {"ans": f"System Error: {str(e)}"}
