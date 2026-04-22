@@ -1,16 +1,15 @@
 {
   "version": 2,
-  "installCommand": "npm install --prefix frontend && pip install --break-system-packages -r backend/requirements.txt",
-  "buildCommand": "cd frontend && npm run build",
-  "outputDirectory": "frontend/dist",
-  "routes": [
+  "installCommand": "pip install -r requirements.txt",
+  "functions": {
+    "backend/api/*.py": {
+      "runtime": "python3.11"
+    }
+  },
+  "rewrites": [
     {
-      "src": "/api/(.*)",
-      "dest": "backend/api/index.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+        "source": "/api/(.*)",
+      "destination": "/backend/api/index.py"
     }
   ]
 }
