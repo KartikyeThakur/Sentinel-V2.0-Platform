@@ -1,5 +1,3 @@
-from backend.api.index import app
-# Vercel FastAPI entrypoint.
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
@@ -24,7 +22,6 @@ def home():
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
-
 
 DATA_ROOT = os.getenv("SENTINEL_DATA_DIR", "/tmp/sentinel")
 UPLOAD_DIR = os.path.join(DATA_ROOT, "datasets")
@@ -151,7 +148,6 @@ def geocode_place(place: str, cache: dict):
 
     cache[key] = None
     return None
-
 
 @app.post("/api/register")
 async def register(data: dict):
@@ -366,7 +362,6 @@ async def map_data():␊
     return items
 
 
-
 @app.post("/api/viz")
 async def viz(data: dict):
     if CURRENT_DF is None:
@@ -390,35 +385,3 @@ def ask_ai(payload: dict):
         return {"ans": "System offline. Please upload a dataset."}
 
     keys = [
-        os.getenv("GEMINI_API_KEY_1"),
-        os.getenv("GEMINI_API_KEY_2"),
-        os.getenv("GEMINI_API_KEY_3"),
-        os.getenv("GEMINI_API_KEY_4"),
-        os.getenv("GEMINI_API_KEY_5"),
-    ]
-
-    api_key = next((k for k in keys if k), None)
-
-    if not api_key:
-        return {"ans": "No API keys configured."}
-
-    user_q = payload.get("q", "")
-    if not user_q:
-        return {"ans": "No question provided."}
-
-    cols = list(CURRENT_DF.columns)[:15]
-
-    prompt = f"You are Sentinel, a data AI. Dataset columns: {cols}. User asks: {user_q}. Keep your answer brief and helpful."
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-    headers = {"Content-Type": "application/json"}
-    data = {"contents": [{"parts": [{"text": prompt}]}]}
-
-    try:
-        resp = requests.post(url, headers=headers, json=data, timeout=15)
-        if resp.status_code == 200:
-            result = resp.json()
-            answer = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "No response")
-            return {"ans": answer}
-        return {"ans": f"Google Server Error Code {resp.status_code}"}
-    except Exception as e:
-        return {"ans": f"System Error: {str(e)}"}
