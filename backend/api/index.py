@@ -1,3 +1,5 @@
+from backend.api.index import app
+# Vercel FastAPI entrypoint.
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
@@ -8,7 +10,6 @@ import json
 from datetime import datetime
 import requests
 from dotenv import load_dotenv
-from backend.api.index import app
 
 load_dotenv()
 
