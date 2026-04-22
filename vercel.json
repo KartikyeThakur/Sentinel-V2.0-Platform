@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "installCommand": "npm install --prefix frontend && pip install -r backend/requirements.txt",
+  "installCommand": "npm install --prefix frontend && pip install --break-system-packages -r backend/requirements.txt",
   "buildCommand": "cd frontend && npm run build",
   "outputDirectory": "frontend/dist",
   "routes": [
