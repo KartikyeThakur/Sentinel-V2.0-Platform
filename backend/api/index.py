@@ -21,8 +21,18 @@ def home():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("SELECT 1")
+        conn.close()
 
+        if not os.path.isdir(UPLOAD_DIR):
+            raise RuntimeError("Upload directory is missing")
+
+        return {"status": "ok", "message": "Backend is running perfectly"}
+    except Exception:
+        return {"status": "error", "message": "Backend has an issue"}
+        
 DATA_ROOT = os.getenv("SENTINEL_DATA_DIR", "/tmp/sentinel")
 UPLOAD_DIR = os.path.join(DATA_ROOT, "datasets")
 DB_PATH = os.path.join(DATA_ROOT, "sentinel.db")
