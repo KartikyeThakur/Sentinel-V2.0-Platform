@@ -4,9 +4,8 @@
   "buildCommand": "cd frontend && npm run build",
   "outputDirectory": "frontend/dist",
   "functions": {
-    "backend/api/*.py": {
-      "runtime": "python3.11",
-      "maxDuration": 60
+    "backend/api/index.py": {
+      "runtime": "python3.9"
     }
   },
   "rewrites": [
