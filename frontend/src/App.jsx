@@ -144,6 +144,18 @@ export default function MainApp() {
     window.location.reload();
   };
 
+  const saveApiBase = () => {
+    if (typeof window === "undefined") return;
+    const cleaned = (apiInput || "").trim().replace(/\/$/, "");
+    if (!cleaned.startsWith("http://") && !cleaned.startsWith("https://")) {
+      alert("API URL must start with http:// or https://");
+      return;
+    }
+    const normalized = cleaned.endsWith("/api") ? cleaned : `${cleaned}/api`;
+    localStorage.setItem("sentinel_api_base_url", normalized);
+    window.location.reload();
+  };
+
   const uploadFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
