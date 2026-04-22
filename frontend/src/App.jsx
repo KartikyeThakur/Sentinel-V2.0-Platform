@@ -46,9 +46,26 @@ export default function MainApp() {
   const [aiChat, setAiChat] = useState([{role: 'ai', text: 'I am Sentinel AI. All systems are online. How can I assist with your data today?'}]);
   const [aiInput, setAiInput] = useState("");
   const chatEndRef = useRef(null);
-  const API = (import.meta.env.VITE_API_BASE_URL || "https://sentinel-v2-0-platform.vercel.app/api").replace(/\/$/, "");
+   const API = (import.meta.env.VITE_API_BASE_URL || "https://sentinel-v2-0-platform-3tix.vercel.app/api").replace(/\/$/, "");
+  const [backendStatus, setBackendStatus] = useState({ state: "checking", message: "Checking backend..." });
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [aiChat, aiOpen]);
+  useEffect(() => {
+    const checkBackend = async () => {
+      try {
+        const res = await axios.get(`${API}/health`, { timeout: 8000 });
+        if (res.data?.status === "ok") {
+          setBackendStatus({ state: "online", message: "Backend is working" });
+        } else {
+          setBackendStatus({ state: "warning", message: "Backend responded unexpectedly" });
+        }
+      } catch (error) {
+        setBackendStatus({ state: "offline", message: "Backend is not reachable" });
+      }
+    };
+
+    checkBackend();
+  }, [API]);
 
   const sync = async () => {
     try {
@@ -399,7 +416,10 @@ export default function MainApp() {
     <div className="h-screen w-screen bg-[#020617] flex items-center justify-center font-mono text-white p-6 overflow-hidden">
       <div className="bg-white/[0.02] border border-cyan-500/20 rounded-[40px] p-12 w-full max-w-sm backdrop-blur-3xl shadow-2xl">
         <ShieldCheck className="text-cyan-400 mb-6 mx-auto" size={50} />
-        <h1 className="text-xl font-black text-center mb-8 uppercase italic tracking-widest">Sentinel Access</h1>
+                <h1 className="text-xl font-black text-center mb-5 uppercase italic tracking-widest">Sentinel Access</h1>
+        <p className={`text-[10px] text-center uppercase tracking-wider mb-4 ${backendStatus.state === "online" ? "text-emerald-400" : backendStatus.state === "offline" ? "text-red-400" : "text-amber-300"}`}>
+          {backendStatus.message}
+        </p>
         <div className="space-y-4">
           <input type="text" placeholder="Username" className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm outline-none" value={creds.u} onChange={e=>setCreds({...creds, u:e.target.value})} />
           <input type="password" placeholder="Password" className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-sm outline-none" value={creds.p} onChange={e=>setCreds({...creds, p:e.target.value})} />
@@ -454,8 +474,8 @@ export default function MainApp() {
             <h1 className="text-3xl font-black tracking-tighter text-cyan-500">SENTINEL V2.0</h1>
             <p className="text-[9px] text-white/40 tracking-[0.5em]">Dataset: {info?.active || 'None'}</p>
           </div>
-          <div className="text-[10px] font-bold text-green-400 animate-pulse uppercase flex items-center gap-2">
-            ● System Active
+          <div className={`text-[10px] font-bold uppercase flex items-center gap-2 ${backendStatus.state === "online" ? "text-green-400 animate-pulse" : backendStatus.state === "offline" ? "text-red-400" : "text-amber-300"}`}>
+            ● {backendStatus.state === "online" ? "System Active" : backendStatus.state === "offline" ? "Backend Offline" : "Checking Backend"}
           </div>
         </header>
 
