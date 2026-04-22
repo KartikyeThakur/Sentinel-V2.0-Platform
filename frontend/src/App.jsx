@@ -46,7 +46,8 @@ export default function MainApp() {
   const [aiChat, setAiChat] = useState([{role: 'ai', text: 'I am Sentinel AI. All systems are online. How can I assist with your data today?'}]);
   const [aiInput, setAiInput] = useState("");
   const chatEndRef = useRef(null);
-   const API = (import.meta.env.VITE_API_BASE_URL || "https://sentinel-v2-0-platform-3tix.vercel.app/api").replace(/\/$/, "");
+  const defaultApiBase = typeof window !== "undefined" ? `${window.location.origin}/api` : "/api";
+  const API = (import.meta.env.VITE_API_BASE_URL || defaultApiBase).replace(/\/$/, "");
   const [backendStatus, setBackendStatus] = useState({ state: "checking", message: "Checking backend..." });
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [aiChat, aiOpen]);
@@ -55,9 +56,9 @@ export default function MainApp() {
       try {
         const res = await axios.get(`${API}/health`, { timeout: 8000 });
         if (res.data?.status === "ok") {
-          setBackendStatus({ state: "online", message: "Backend is working" });
+          setBackendStatus({ state: "online", message: res.data?.message || "Backend is working" });
         } else {
-          setBackendStatus({ state: "warning", message: "Backend responded unexpectedly" });
+          setBackendStatus({ state: "warning", message: res.data?.message || "Backend responded unexpectedly" });
         }
       } catch (error) {
         setBackendStatus({ state: "offline", message: "Backend is not reachable" });
@@ -416,7 +417,7 @@ export default function MainApp() {
     <div className="h-screen w-screen bg-[#020617] flex items-center justify-center font-mono text-white p-6 overflow-hidden">
       <div className="bg-white/[0.02] border border-cyan-500/20 rounded-[40px] p-12 w-full max-w-sm backdrop-blur-3xl shadow-2xl">
         <ShieldCheck className="text-cyan-400 mb-6 mx-auto" size={50} />
-                <h1 className="text-xl font-black text-center mb-5 uppercase italic tracking-widest">Sentinel Access</h1>
+        <h1 className="text-xl font-black text-center mb-5 uppercase italic tracking-widest">Sentinel Access</h1>
         <p className={`text-[10px] text-center uppercase tracking-wider mb-4 ${backendStatus.state === "online" ? "text-emerald-400" : backendStatus.state === "offline" ? "text-red-400" : "text-amber-300"}`}>
           {backendStatus.message}
         </p>
