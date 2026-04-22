@@ -8,6 +8,7 @@ import json
 from datetime import datetime
 import requests
 from dotenv import load_dotenv
+from backend.api.index import app
 
 load_dotenv()
 
