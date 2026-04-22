@@ -574,7 +574,7 @@ export default function MainApp() {
                             <TileLayer url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}" attribution="&copy; Google Maps" />
                             <MapController center={mapCenter} zoom={mapZoom} />
                             {mapData?.map((m, i) => {
-                                if(!m.lat || !m.lng) return null;
+                               if (m?.lat == null || m?.lng == null) return null;
                                 return (
                                     <Marker 
                                         key={i} 
