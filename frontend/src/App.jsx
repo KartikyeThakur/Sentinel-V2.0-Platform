@@ -131,6 +131,18 @@ export default function MainApp() {
         } else { setAuth(true); }
     } catch (error) { alert("Auth Failed."); }
   };
+  
+  const saveApiBase = () => {
+    if (typeof window === "undefined") return;
+    const cleaned = (apiInput || "").trim().replace(/\/$/, "");
+    if (!cleaned.startsWith("http://") && !cleaned.startsWith("https://")) {
+      alert("API URL must start with http:// or https://");
+      return;
+    }
+    const normalized = cleaned.endsWith("/api") ? cleaned : `${cleaned}/api`;
+    localStorage.setItem("sentinel_api_base_url", normalized);
+    window.location.reload();
+  };
 
   const saveApiBase = () => {
     if (typeof window === "undefined") return;
@@ -445,7 +457,7 @@ export default function MainApp() {
           {backendStatus.message}
         </p>
         <div className="space-y-4">
-          <div className="space-y-2">
+                    <div className="space-y-2">
             <input
               type="text"
               placeholder="Backend URL (e.g. https://your-backend.vercel.app/api)"

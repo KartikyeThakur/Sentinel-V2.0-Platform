@@ -11,8 +11,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-app = FastAPI()
-
+app = FastAPI()␊
 
 @app.get("/")
 def home():
@@ -33,20 +32,19 @@ def health():
     except Exception:
         return {"status": "error", "message": "Backend has an issue"}
         
-DATA_ROOT = os.getenv("SENTINEL_DATA_DIR", "/tmp/sentinel")
-UPLOAD_DIR = os.path.join(DATA_ROOT, "datasets")
-DB_PATH = os.path.join(DATA_ROOT, "sentinel.db")
-GEOCODE_CACHE_PATH = os.path.join(DATA_ROOT, "geo_cache.json")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
+DATA_ROOT = os.getenv("SENTINEL_DATA_DIR", "/tmp/sentinel")␊
+UPLOAD_DIR = os.path.join(DATA_ROOT, "datasets")␊
+DB_PATH = os.path.join(DATA_ROOT, "sentinel.db")␊
+GEOCODE_CACHE_PATH = os.path.join(DATA_ROOT, "geo_cache.json")␊
+os.makedirs(UPLOAD_DIR, exist_ok=True)␊
+␊
+app.add_middleware(␊
+    CORSMiddleware,␊
+    allow_origins=["*"],␊
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
+    allow_methods=["*"],␊
+    allow_headers=["*"],␊
+)␊
 
 def safe_name(filename: str) -> str:
     cleaned = os.path.basename((filename or "").strip())
@@ -312,8 +310,8 @@ async def purge(name: str):
     return {"status": "OK"}
 
 
-@app.get("/api/info")
-async def get_info():
+@app.get("/api/info")␊
+async def get_info():␊
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -323,7 +321,7 @@ async def get_info():
         cols = list(CURRENT_DF.columns) if CURRENT_DF is not None else []
         files = os.listdir(UPLOAD_DIR) if os.path.exists(UPLOAD_DIR) else []
         return {"files": files, "active": ACTIVE_FILE, "history": h, "cols": cols}
-    except Exception:
+     except Exception:
         return {"files": [], "active": "None", "history": [], "cols": []}
 
 @app.delete("/api/clear_history")
@@ -337,9 +335,6 @@ async def clear_history():
         return {"status": "OK"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to clear history: {e}")
-
-
-
 
 @app.get("/api/data")
 async def get_data(page: int = 1, query: str = ""):

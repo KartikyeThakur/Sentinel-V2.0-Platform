@@ -1,21 +1,15 @@
 {
   "version": 2,
-  "installCommand": "npm ci --prefix frontend && pip install -r requirements.txt",
-  "buildCommand": "cd frontend && npm run build",
-  "outputDirectory": "frontend/dist",
+  "installCommand": "pip install -r requirements.txt",
   "functions": {
-    "api/*.py": {
+    "backend/api/*.py": {
       "runtime": "python3.11"
     }
   },
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/index.py"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "destination": "/backend/api/index.py"
     }
   ]
 }
