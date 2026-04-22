@@ -39,9 +39,12 @@ DB_PATH = os.path.join(DATA_ROOT, "sentinel.db")
 GEOCODE_CACHE_PATH = os.path.join(DATA_ROOT, "geo_cache.json")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+_cors_origins_raw = (os.getenv("CORS_ALLOW_ORIGINS") or "*").strip()
+CORS_ALLOW_ORIGINS = ["*"] if _cors_origins_raw == "*" else [o.strip() for o in _cors_origins_raw.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ALLOW_ORIGINS or ["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
