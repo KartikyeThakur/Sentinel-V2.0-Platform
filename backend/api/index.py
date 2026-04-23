@@ -403,6 +403,29 @@ async def map_data():
 
     geocode_cols = [cols[k] for k in GEOCODE_COL_CANDIDATES if k in cols]
     if not geocode_cols:
+        keyword_matches = []
+        for original in CURRENT_DF.columns:
+            lowered = str(original).strip().lower()
+            if any(token in lowered for token in GEOCODE_COL_CANDIDATES):
+                keyword_matches.append(original)
+        geocode_cols = keyword_matches
+
+    if not geocode_cols:
+        inferred = []
+        for column in CURRENT_DF.columns:
+            series = CURRENT_DF[column].dropna()
+            if series.empty:
+                continue
+            sample = str(series.iloc[0]).strip()
+            if not sample:
+                continue
+            if any(ch.isalpha() for ch in sample):
+                inferred.append(column)
+            if len(inferred) >= 5:
+                break
+        geocode_cols = inferred
+
+    if not geocode_cols:
         return []
 
     cache = load_geo_cache()
