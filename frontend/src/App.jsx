@@ -34,7 +34,7 @@ export default function MainApp() {
   const [viz, setViz] = useState([]);
   const [vizCompare, setVizCompare] = useState([]);
   const [activeCol, setActiveCol] = useState("");
-  const [compareCol, setCompareCol] = useState("");
+    const [compareCol, setCompareCol] = useState("");
   const [isComparing, setIsComparing] = useState(false);
   const [rowFilter, setRowFilter] = useState(""); 
   
@@ -59,9 +59,25 @@ export default function MainApp() {
   const defaultApiBase = typeof window !== "undefined" ? `${window.location.origin}/api` : "/api";
   const API = (runtimeApiBase || import.meta.env.VITE_API_BASE_URL || defaultApiBase).replace(/\/$/, "");
   const [apiInput, setApiInput] = useState(API);
-  
-  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [aiChat, aiOpen]);
+  const [backendStatus, setBackendStatus] = useState({ state: "checking", message: "Checking backend..." });
 
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [aiChat, aiOpen]);
+  useEffect(() => {
+    const checkBackend = async () => {
+      try {
+        const res = await axios.get(`${API}/health`, { timeout: 8000 });
+        if (res.data?.status === "ok") {
+          setBackendStatus({ state: "online", message: res.data?.message || "Backend is working" });
+        } else {
+          setBackendStatus({ state: "warning", message: res.data?.message || "Backend responded unexpectedly" });
+        }
+      } catch (error) {
+        setBackendStatus({ state: "offline", message: `Backend is not reachable (${API})` });
+      }
+    };
+
+    checkBackend();
+  }, [API]);
 
   const sync = async () => {
     try {
@@ -87,319 +103,7 @@ export default function MainApp() {
                 setMapData(m.data || []);
             }
         }
-    } catch (err) { console.error("Sync error"); }
-  };
-
-  useEffect(() => { if (auth) sync(); }, [auth, view, page, search]);
-
-  useEffect(() => {
-      if (auth && activeCol && info.active !== 'None') {
-          axios.post(`${API}/viz`, { col: activeCol }).then(res => setViz(res.data || []));
-      }
-  }, [auth, activeCol, info.active]);
-
-  useEffect(() => {
-      if (auth && isComparing && compareCol && info.active !== 'None') {
-          axios.post(`${API}/viz`, { col: compareCol }).then(res => setVizCompare(res.data || []));
-      }
-  }, [auth, isComparing, compareCol, info.active]);
-
-  const handleAuth = async () => {
-    if (!creds.u || !creds.p) { alert("Please enter ID and KEY."); return; }
-    try {
-        const route = mode === 'login' ? 'login' : 'register';
-        await axios.post(`${API}/${route}`, { username: creds.u, password: creds.p });
-        if (mode === 'register') { 
-            alert("Registration successful! Logging you in..."); 
-            setMode('login'); setAuth(true); 
-        } else { setAuth(true); }
-    } catch (error) { alert("Auth Failed."); }
-  };
-  
-  const saveApiBase = () => {
-    if (typeof window === "undefined") return;
-    const cleaned = (apiInput || "").trim().replace(/\/$/, "");
-    if (!cleaned.startsWith("http://") && !cleaned.startsWith("https://")) {
-      alert("API URL must start with http:// or https://");
-      return;
-    }
-    const normalized = cleaned.endsWith("/api") ? cleaned : `${cleaned}/api`;
-    localStorage.setItem("sentinel_api_base_url", normalized);
-    window.location.reload();
-  };
-
-  const uploadFile = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const fd = new FormData(); 
-    fd.append('file', file);
-    try {
-        await axios.post(`${API}/upload`, fd);
-        setActiveCol(""); setCompareCol(""); setIsComparing(false); setRowFilter("");
-        setView('dash');
-        await sync(); 
-    } catch (err) { 
-        alert("Upload Failed."); 
-    } finally {
-        e.target.value = null; 
-    }
-  };
-
-  const handleCleanData = async () => {
-      try {
-          const res = await axios.post(`${API}/clean`);
-          alert(`Cleaned! Removed ${res.data.removed} corrupted rows.`);
-          await sync();
-      } catch (err) { alert("Failed to clean."); }
-  };
-
-  const handleReuse = async (name) => {
-    await axios.post(`${API}/reuse`, { filename: name });
-    setActiveCol(""); setCompareCol(""); setIsComparing(false); setRowFilter("");
-    setView('dash');
-    await sync(); 
-  };
-
-  const handlePurge = async (name) => {
-    await axios.delete(`${API}/purge/${name}`);
-    await sync();
-    if(info.active === name) setView('dash');
-  };
-
-  const executeMapSearch = async (searchQuery) => {
-    const query = searchQuery.toLowerCase().trim();
-    if (!query) return;
-
-    setMapSearch(query); 
-
-    const found = mapData.find(m => m.name.toLowerCase().includes(query));
-    if (found) {
-        setMapCenter([found.lat, found.lng]);
-        setMapZoom(14); 
-        return;
-    } 
-    
-    try {
-        const response = await axios.get(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
-        if (response.data && response.data.length > 0) {
-            const { lat, lon } = response.data[0];
-            setMapCenter([parseFloat(lat), parseFloat(lon)]);
-            setMapZoom(12); 
-        } else {
-            console.log(`Geocoding failed for: ${query}`);
-        }
-    } catch (error) {
-        console.error("Network error while searching for the location.");
-    }
-  };
-
-  const handleExport = () => {
-      if (!viz || viz.length === 0) {
-          setAiChat(prev => [...prev, {role: 'ai', text: "There is no data currently visualized to export."}]);
-          return;
-      }
-      let csvContent = "data:text/csv;charset=utf-8,Category,Value\n";
-      viz.forEach(row => {
-          csvContent += `"${row.name}","${row.value}"\n`;
-      });
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `Sentinel_Export_${activeCol || 'Data'}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-  };
-
-  const handleSendAi = async () => {
-    if (!aiInput.trim()) return;
-    const userMessage = aiInput;
-    const userMessageLower = userMessage.toLowerCase().trim();
-    
-    const newChat = [...aiChat, {role: 'user', text: userMessage}];
-    setAiChat(newChat); 
-    setAiInput("");
-    
-    try {
-        let success = false;
-        let aiResponseText = "";
-
-        try {
-            const response = await axios.post(`${API}/ai`, { q: userMessage });
-            aiResponseText = response.data.ans || "";
-            success = true; 
-        } catch (err) {
-            console.warn("Backend API Failed.", err);
-        }
-
-        let aiDecision = null;
-
-        if (success) {
-            const jsonMatch = aiResponseText.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                try {
-                    aiDecision = JSON.parse(jsonMatch[0]);
-                } catch (e) {
-                    success = false; 
-                }
-            } else {
-                success = false; 
-            }
-        }
-
-        if (!success || !aiDecision) {
-            aiDecision = { text: aiResponseText || "I've processed your request and updated the interface.", view: null, location: null, column: null, chart: null, export: false };
-
-            const isGreeting = ['hi', 'hello', 'hey', 'sup', 'yo', 'greetings', 'hii', 'hiii'].some(g => userMessageLower === g || userMessageLower.startsWith(g + ' '));
-            
-            if (isGreeting) {
-                aiDecision.text = aiResponseText || "Hello! I am online and ready. What data would you like to explore today?";
-            }
-            else if (userMessageLower.match(/(map|location|where|stadium|city|town)/)) {
-                aiDecision.view = 'map';
-                const cities = ['mumbai', 'delhi', 'bangalore', 'chennai', 'kolkata', 'hyderabad', 'ahmedabad', 'pune', 'jaipur', 'wankhede', 'kotla', 'chinnaswamy'];
-                const foundCity = cities.find(c => userMessageLower.includes(c));
-                aiDecision.location = foundCity || 'mumbai';
-                aiDecision.text = `Zooming into ${aiDecision.location} on the interactive map for you now.`;
-            }
-            else if (userMessageLower.match(/(export|download|save|csv)/)) {
-                aiDecision.export = true;
-                aiDecision.text = "Your data is ready. I am generating the CSV download now.";
-            }
-            else if (userMessageLower.match(/(table|raw data|spreadsheet|rows|grid)/)) {
-                aiDecision.view = 'data';
-                aiDecision.text = "I've switched to the raw data table view so you can inspect the individual rows.";
-            }
-            else {
-                aiDecision.view = 'dash';
-                
-                if (userMessageLower.includes('pie')) aiDecision.chart = 'pie';
-                else if (userMessageLower.includes('line')) aiDecision.chart = 'line';
-                else if (userMessageLower.includes('area')) aiDecision.chart = 'area';
-                else aiDecision.chart = 'bar';
-
-                let prettyName = "the data";
-                if (userMessageLower.match(/(win|won|victor|champion)/)) { aiDecision.column = 'winner'; prettyName = "match winners"; }
-                else if (userMessageLower.match(/(player|man of the match|mvp|best)/)) { aiDecision.column = 'player_of_match'; prettyName = "top players"; }
-                else if (userMessageLower.match(/(venue|stadium|ground)/)) { aiDecision.column = 'venue'; prettyName = "stadium venues"; }
-                else if (userMessageLower.match(/(toss|coin|decide)/)) { aiDecision.column = 'toss_decision'; prettyName = "toss decisions"; }
-                else if (userMessageLower.match(/(city|town)/)) { aiDecision.column = 'city'; prettyName = "cities"; }
-                else if (userMessageLower.match(/(team|squad)/)) { aiDecision.column = 'team1'; prettyName = "teams"; }
-                else if (info.cols && info.cols.length > 0) aiDecision.column = info.cols[0];
-
-                aiDecision.text = aiResponseText || `I have analyzed the dataset and generated a ${aiDecision.chart} chart displaying the ${prettyName} statistics for you.`;
-            }
-        }
-
-        setAiChat(prev => [...prev, {role: 'ai', text: aiDecision.text}]);
-        
-        let currentView = view;
-        const isGraphRequest = userMessageLower.match(/(graph|chart|pie|bar|plot|visualize|show me|who|what)/);
-        
-        if (isGraphRequest && (!aiDecision.view || aiDecision.view === 'data')) {
-            aiDecision.view = 'dash';
-        }
-
-        if (aiDecision.view && ['dash', 'data', 'map', 'history'].includes(aiDecision.view)) {
-            setView(aiDecision.view);
-            currentView = aiDecision.view;
-        }
-
-        if (currentView === 'map' && aiDecision.location) {
-            executeMapSearch(aiDecision.location);
-        }
-
-        if (currentView === 'dash' || !aiDecision.view) {
-            let viewChanged = false;
-            
-            if (aiDecision.column) {
-                const matchedCol = info.cols?.find(c => c.toLowerCase() === aiDecision.column?.toLowerCase());
-                if (matchedCol && matchedCol !== activeCol) {
-                    setActiveCol(matchedCol);
-                    viewChanged = true;
-                }
-            }
-            
-            if (aiDecision.chart && ['bar', 'pie', 'line', 'area'].includes(aiDecision.chart) && aiDecision.chart !== chart) {
-                setChart(aiDecision.chart);
-                viewChanged = true;
-            }
-            if (viewChanged && currentView !== 'dash') {
-                setView('dash'); 
-            }
-        }
-
-        if (aiDecision.export) {
-            setTimeout(handleExport, 800);
-        }
-
-    } catch (error) {
-        setAiChat(prev => [...prev, {role: 'ai', text: `Sorry, I encountered a brief system error: ${error.message}` }]);
-    }
-  };
-
-  const filteredViz = viz.filter(item => item && item.name && item.name.toString().toLowerCase().includes(rowFilter.toLowerCase())).slice(0, 15);
-  const filteredCompare = vizCompare.filter(item => item && item.name && item.name.toString().toLowerCase().includes(rowFilter.toLowerCase())).slice(0, 15);
-
-  const truncateLabel = (label) => {
-      if (!label) return "";
-      const str = String(label);
-      return str.length > 12 ? str.substring(0, 10) + "..." : str;
-  };
-
-  const renderChart = (data) => {
-      if (!data || data.length === 0) {
-          return <div className="h-full w-full flex flex-col items-center justify-center text-slate-500 font-bold uppercase tracking-widest text-xs gap-4"><Activity className="animate-pulse text-cyan-500" size={32} /> Awaiting Data...</div>;
-      }
-
-      const googleChartData = [
-          ["Category", "Value"],
-          ...data.map(item => [truncateLabel(item.name), item.value])
-      ];
-
-      const googleOptions = {
-          is3D: true,
-          backgroundColor: 'transparent',
-          legend: { textStyle: { color: '#94a3b8', fontSize: 11, fontName: 'monospace' }, alignment: 'center' },
-          pieSliceTextStyle: { color: '#ffffff', fontSize: 11, fontName: 'monospace' },
-          chartArea: { width: '90%', height: '80%' },
-          colors: ['#06b6d4', '#a855f7', '#10b981', '#f43f5e', '#f59e0b', '#3b82f6', '#ec4899', '#84cc16']
-      };
-
-      return (
-      <div className="flex-1 w-full h-full relative min-h-0 min-w-0">
-          <div className="absolute inset-0 flex items-center justify-center">
-              
-              {chart === 'pie' ? (
-                  <Chart
-                      chartType="PieChart"
-                      data={googleChartData}
-                      options={googleOptions}
-                      width={"100%"}
-                      height={"100%"}
-                  />
-              ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                      {chart === 'bar' ? (
-                          <BarChart data={data} margin={{ bottom: 35, top: 10, right: 10, left: -20 }}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                              <XAxis dataKey="name" fontSize={10} stroke="#94a3b8" tickFormatter={truncateLabel} interval={0} angle={-30} textAnchor="end" />
-                              <YAxis fontSize={10} stroke="#94a3b8" />
-                              <Tooltip cursor={{fill: '#0f172a', opacity: 0.5}} contentStyle={{background:'#020617', border:'1px solid #22d3ee', borderRadius:'10px'}} />
-                              <Bar dataKey="value" filter="url(#shadow3D)" radius={[8,8,0,0]}>
-                                  {data.map((entry, index) => {
-                                      const gradients = ["url(#colorCyan)", "url(#colorPurple)", "url(#colorEmerald)", "url(#colorRose)", "url(#colorAmber)"];
-                                      return <Cell key={`cell-${index}`} fill={gradients[index % gradients.length]} />
-                                  })}
-                              </Bar>
-                          </BarChart>
-                      ) : chart === 'area' ? (
-                          <AreaChart data={data} margin={{ bottom: 35, top: 10, right: 10, left: -20 }}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                              <XAxis dataKey="name" fontSize={10} stroke="#94a3b8" tickFormatter={truncateLabel} interval={0} angle={-30} textAnchor="end" />
-                              <YAxis fontSize={10} stroke="#94a3b8" />
-                              <Tooltip contentStyle={{background:'#020617', border:'1px solid #10b981', borderRadius:'10px'}}/>
-                              <Area type="monotone" dataKey="value" stroke="#10b981" fill="url(#colorEmerald)" strokeWidth={3} filter="url(#glow3D)"/>
+@@ -419,53 +402,50 @@ export default function MainApp() {
                           </AreaChart>
                       ) : (
                           <LineChart data={data} margin={{ bottom: 35, top: 10, right: 10, left: -20 }}>
@@ -425,12 +129,14 @@ export default function MainApp() {
       <div className="bg-white/[0.02] border border-cyan-500/20 rounded-[40px] p-12 w-full max-w-sm backdrop-blur-3xl shadow-2xl">
         <ShieldCheck className="text-cyan-400 mb-6 mx-auto" size={50} />
         <h1 className="text-xl font-black text-center mb-5 uppercase italic tracking-widest">Sentinel Access</h1>
-
+        <p className={`text-[10px] text-center uppercase tracking-wider mb-4 ${backendStatus.state === "online" ? "text-emerald-400" : backendStatus.state === "offline" ? "text-red-400" : "text-amber-300"}`}>
+          {backendStatus.message}
+        </p>
         <div className="space-y-4">
                     <div className="space-y-2">
             <input
               type="text"
-              placeholder="https://sentinel-v2-0-platform.vercel.app/api"
+              placeholder="Backend URL (e.g. https://your-backend.vercel.app/api)"
               className="w-full bg-black/40 border border-cyan-500/30 rounded-2xl p-3 text-xs outline-none"
               value={apiInput}
               onChange={e => setApiInput(e.target.value)}
@@ -451,25 +157,7 @@ export default function MainApp() {
         </div>
       </div>
     </div>
-  );
-
-  return (
-    <div className="h-screen w-screen bg-[#020617] text-slate-100 font-mono flex overflow-hidden">
-      
-      <svg style={{ height: 0, width: 0, position: 'absolute' }}>
-        <defs>
-            <linearGradient id="colorCyan" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#06b6d4" stopOpacity={0.9}/><stop offset="95%" stopColor="#083344" stopOpacity={0.9}/></linearGradient>
-            <linearGradient id="colorPurple" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#a855f7" stopOpacity={0.9}/><stop offset="95%" stopColor="#3b0764" stopOpacity={0.9}/></linearGradient>
-            <linearGradient id="colorEmerald" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.9}/><stop offset="95%" stopColor="#064e3b" stopOpacity={0.9}/></linearGradient>
-            <linearGradient id="colorRose" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f43f5e" stopOpacity={0.9}/><stop offset="95%" stopColor="#4c0519" stopOpacity={0.9}/></linearGradient>
-            <linearGradient id="colorAmber" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f59e0b" stopOpacity={0.9}/><stop offset="95%" stopColor="#78350f" stopOpacity={0.9}/></linearGradient>
-            <filter id="shadow3D" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="4" dy="6" stdDeviation="4" floodColor="#000000" floodOpacity="0.8"/>
-                <feDropShadow dx="-1" dy="-1" stdDeviation="2" floodColor="#ffffff" floodOpacity="0.2"/>
-            </filter>
-            <filter id="glow3D" x="-20%" y="-20%" width="140%" height="140%">
-                <feDropShadow dx="0" dy="0" stdDeviation="6" floodColor="#34d399" floodOpacity="0.8"/>
-            </filter>
+@@ -491,53 +471,50 @@ export default function MainApp() {
         </defs>
       </svg>
 
@@ -495,7 +183,9 @@ export default function MainApp() {
             <h1 className="text-3xl font-black tracking-tighter text-cyan-500">SENTINEL V2.0</h1>
             <p className="text-[9px] text-white/40 tracking-[0.5em]">Dataset: {info?.active || 'None'}</p>
           </div>
-
+          <div className={`text-[10px] font-bold uppercase flex items-center gap-2 ${backendStatus.state === "online" ? "text-green-400 animate-pulse" : backendStatus.state === "offline" ? "text-red-400" : "text-amber-300"}`}>
+            ● {backendStatus.state === "online" ? "System Active" : backendStatus.state === "offline" ? "Backend Offline" : "Checking Backend"}
+          </div>
         </header>
 
         {info?.active === 'None' ? (
@@ -521,7 +211,6 @@ export default function MainApp() {
                                 
                                 {isComparing && (
                                     <select value={compareCol} onChange={(e) => setCompareCol(e.target.value)} className="bg-black/60 border border-purple-500/30 text-purple-400 text-[10px] uppercase font-black px-4 py-2 rounded-xl outline-none cursor-pointer max-w-xs">
-                                        <option value="">-- Compare Metric --</option>
                                         {info.cols?.map(c => <option key={c} value={c}>{c}</option>)}
                                     </select>
                                 )}
